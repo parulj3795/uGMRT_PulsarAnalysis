@@ -63,7 +63,7 @@ The uGMRT pulsar data (PA: phased array) files are usually in *.raw* or *.gmrt_r
 
     For blind pulsar searches the process is very different and not disussed here.
 
-* **Step 2**: To get the single pulses `dspsr` routine of the DSPSR package is used. 
+* **Step 2**: To get the single pulses `dspsr` routine of the DSPSR package is used. Note that the DSPSR package does not yet work on 16-bit data (atleast from uGMRT). To use 16-bit pulsar data, it must be reduced to 8-bit and can directly be used in `dspsr` without following **Step 1**.
 
     `dspsr -E your_file_name.eph -U 600 -b 512 -s -K -A -O your_file_name your_file_name.fil`
 
@@ -80,8 +80,6 @@ The output file `your_file_name.ar` will have the following information about ev
 * MJD / pulse number
 * Intensity (uncalibrated) vs phase/bins vs frequency
 
-The DSPSR package does not yet work on 16-bit data.
-
 * **Step 3:** For new pulsars where the period is not exactly known, the `pdmp` routine can be used.
 
     `pdmp -g your_file_name.png/png your_file_name.ar`
@@ -96,4 +94,52 @@ The DSPSR package does not yet work on 16-bit data.
 
 ## Data Cleaning
 
-Usually pulsar data comes with radio frequency interference (RFI), which should be removed before any further scientific analysis.
+Usually pulsar data comes with radio frequency interference (RFI), which should be removed before any further scientific analysis. Typically such data is cleaned manually using the `pazi` (interactive zapping) subroutine of PSRCHIVE.
+
+Since the `.ar` files are typically large, they're difficult to run on simple machines. I find the following method to be much faster in that case -
+
+* It is first important to remove the bad frequency channels. 
+
+    `pam -T -e arT your_file_name.ar` \
+    &rarr; This will create a new `your_file_name.arT` file with all the single pulses averaged, but retains the frequency vs phase information.
+
+    `pazi your_file_name.arT` \
+    &rarr; This will open two new windows, one showing an average profile, and another showing time vs phase. The first window will help seeing the pulsar and shows the profile S/N. This changes with every zap. Because we have a time scrunched file (`-T`), the second window will only show an averaged pulse (intensity) with phase. The main zapping happens in this window. 
+
+    On the second window, press `f`. This will show the data as frequency vs phase. Unless the pulsar is bright, the screen will look like a lot of pixels without any particular patten. Check the help option (`h`) to see how to use pazi.
+
+    In general, the first step should be to zap (remove) the first few and last few channels which usually have the most RFI. After that it is dependent upon the user how to clean the data. As a check, keep an eye on the first window which shows a change in the pulsar average profile and the S/N after each zap. 
+
+    After the data is sufficiently clean, save the file and get the `paz` command by pressing `p`. Save the output shown in terminal. THIS IS REQUIRED! 
+
+* Use the equivalent `paz` command output on `your_file_name.ar` file (save as new file `your_file_name.ar.Tpaz`). Now frequency scrunch this file and clean the data in pulse vs phase.
+
+    `pam -F -e Tpaz.F your_file_name.ar.Tpaz` \
+    &rarr; This makes a new file `your_file_name.ar.Tpaz.F` which is clean in frequency vs phase (and now scrunched). It is not scrunched in time, so it will have all the information pulse vs phase information, added over all frequencies. 
+
+    `pazi your_file_name.ar.Tpaz.F`
+    &rarr; This time, all the work needs to be in the second window which shows a pulse stack (pulse number vs phase). It is completely user (and the scientific goal) based on how the data should be cleaned. 
+
+    It will be best practice to save the equivalent `paz` command here as well. 
+
+* Depending upon the complexity, it may take a few rounds of data cleaning before a satisfactory result is achieved. Apply the final `paz` command, which includes all the zapping (frequency and time) on the `your_file_name.ar` file. Save the final time and frequency cleaned `.ar` file as `your_file_name.ar.TFpaz`. This will be the cleaned full data file with the frequency, time, and phase information.
+
+If the system supports running large (~ few GBs) `.ar` files, the cleaning can be done directly on it.
+
+## Basic plots using PSRCHIVE
+
+* To get a frequency vs phase plot &rarr; `pav -GTp -g your_file_name.ar.TFpaz.FvsP.png/png your_file_name.ar.TFpaz`
+* Full pulse stack &rarr; `pav -Y -CDF -g your_file_name.ar.TFpaz.PS.png/png your_file_name.ar.TFpaz`
+* Average profile &rarr; `pav -CDFT -g your_file_name.ar.TFpaz.Profile.png/png your_file_name.ar.TFpaz`
+* Long pulse stack &rarr; `psrplot -pY -jDFp -g 500x2500 -D your_file_name.ar.TFpaz.PSlong.png/png -c set=pub -c 'x:range=(on_phase_left,on_phase_right)' -c above:l='Jxxxx-yyyy' -c above:r='Freq. Range MHz' -N 1,1 your_file_name.ar.TFpaz`
+* Scintillation plot &rarr; `pav -t 30 -f 2 -j -g your_file_name.ar.TFpaz.scint.png/png your_file_name.ar.TFpaz`
+
+## Scientific Analysis
+
+For single pulse analysis, it is useful to get the `your_file_name.ar.TFpaz` file in ascii format such that it can be used with `python,C,julia` etc.
+
+Depending upon the science, `your_file_name.ar.TFpaz` can be scrunched in frequency (`-F`) or time (`-T`) and then exported as ascii.
+
+`pdv -A -K your_file_name.ar.TFpaz -o your_file_name.ar.TFpaz.ascii`
+
+This ascii file will contain the clean data in human readable format which can be accessed through custom python codes. 
