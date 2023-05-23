@@ -53,6 +53,47 @@ The uGMRT pulsar data (PA: phased array) files are usually in *.raw* or *.gmrt_r
 
 * **Step 3**: Run `filterbank` command from PSRCHIVE.
 
-    `filterbank `
+    `filterbank your_file_name.dat > your_file_name.fil`
 
-The DSPSR package does not work on 16-bit data
+    This will create a *.fil* filterbank file of the data. This file will have the header that was made in the last step and the data will be organised as a dynamic spectrum data cube (intensity vs frequency vs time). This file will be used for all the further processing and can be accessed using most pulsar analysis softwares.
+
+## Get single pulses
+
+* **Step 1**: The filterbank file obtained in the previous step can be used to get individual pulses. Obviously this requires knowing the pulsar ephemiris. For known pulsar observations, the ephemiris is obtained from [psrcat](https://www.atnf.csiro.au/research/pulsar/psrcat/), and saved as `your_file_name.eph`.
+
+    For blind pulsar searches the process is very different and not disussed here.
+
+* **Step 2**: To get the single pulses `dspsr` routine of the DSPSR package is used. 
+
+    `dspsr -E your_file_name.eph -U 600 -b 512 -s -K -A -O your_file_name your_file_name.fil`
+
+    where
+    * -E is for the ephemiris.
+    * -U is the upper limit on RAM usage. If 600 is not the right value for your system it will automatically suggest the proper value once the command runs.
+    * -b stands for the number of bins. This can be changed according to preference and can be reduced later on if needed. Keep it in powers of 2.
+    * -K is for removing the inter-channel dispersion delays.
+    * -s is to prompt `dspsr` to create single pulse sub-integrations.
+    * -A asks `dspsr` to output a single archive file with all the integrations. This option still retains the single pulses, and only puts them in a order such that each pulse can be accessed later on. Without this the -s option will create single pulse archives, which can be added later on if needed.
+    * -O is the output file name for the full archive file, with a `.ar` extension.
+
+The output file `your_file_name.ar` will have the following information about every pulse - 
+* MJD / pulse number
+* Intensity (uncalibrated) vs phase/bins vs frequency
+
+The DSPSR package does not yet work on 16-bit data.
+
+* **Step 3:** For new pulsars where the period is not exactly known, the `pdmp` routine can be used.
+
+    `pdmp -g your_file_name.png/png your_file_name.ar`
+
+    Since the size of a typical `.ar` file is too large, a common practice is to scrunch all or some of the frequency channels, otherwise the routine could crash.
+
+    `pam -f 16 -e arf16 your_file_name.ar`
+
+    which makes a new file with a frequency scrunch by a factor of 16 `your_file_name.arf16`. Basically this file will have 4096/16 frequency channels. Now this file can be used in `pdmp`.
+
+    `pdmp -g your_file_name.arf16.png/png your_file_name.arf16`
+
+## Data Cleaning
+
+Usually pulsar data comes with radio frequency interference (RFI), which should be removed before any further scientific analysis.
